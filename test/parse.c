@@ -81,7 +81,7 @@ main()
     };
 
     ws_parser_t parser;
-    ws_parser_init(&parser, &callbacks);
+    ws_parser_init(&parser);
 
     while(1) {
         char buff[4096];
@@ -100,7 +100,7 @@ main()
             break;
         }
 
-        int rc = ws_parser_execute(&parser, buff, nbytes);
+        int rc = ws_parser_execute(&parser, &callbacks, NULL, buff, nbytes);
 
         if(rc != WS_OK) {
             printf("error: %d %s\n", rc, ws_parser_error(rc));
