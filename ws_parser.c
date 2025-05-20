@@ -241,13 +241,14 @@ ws_parser_execute(
             }
             case S_PAYLOAD: {
                 size_t chunk_length = len;
+                size_t i;
 
                 if(chunk_length > parser->bytes_remaining) {
                     chunk_length = parser->bytes_remaining;
                 }
 
                 if(parser->mask_flag) {
-                    for(size_t i = 0; i < chunk_length; i++) {
+                    for(i = 0; i < chunk_length; i++) {
                         buff[i] ^= parser->mask[parser->mask_pos++];
                     }
                 }
@@ -279,9 +280,11 @@ ws_parser_execute(
                     int rc;
 
                     if(parser->control) {
-                        rc = callbacks->on_control_end(data);
+                        rc = callbacks->on_control_end ?
+                             callbacks->on_control_end(data): 0;
                     } else {
-                        rc = callbacks->on_data_end(data);
+                        rc = callbacks->on_data_end ?
+                             callbacks->on_data_end(data) : 0;
                     }
 
                     if(rc) {

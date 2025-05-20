@@ -5,13 +5,22 @@
 #include <stdint.h>
 
 typedef enum {
+    WS_OP_CONTINUE  = 0x0,
+
     WS_FRAME_TEXT   = 0x1,
     WS_FRAME_BINARY = 0x2,
     WS_FRAME_CLOSE  = 0x8,
     WS_FRAME_PING   = 0x9,
     WS_FRAME_PONG   = 0xA,
+
+    // marks
+    WS_FINAL_FRAME = 0x10,
+    WS_HAS_MASK    = 0x20,
 }
 ws_frame_type_t;
+
+#define WS_OP_MASK 0xF
+#define WS_FIN     WS_FINAL_FRAME
 
 typedef struct {
     int(*on_data_begin)     (void*, ws_frame_type_t);
