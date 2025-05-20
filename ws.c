@@ -20,6 +20,7 @@
 typedef struct {
   lua_State *L;
   int idx;
+  const char* eob;
 } ws_arg;
 
 static int on_data_begin(void *user_data, ws_frame_type_t frame_type) {
@@ -43,6 +44,7 @@ static int on_data_payload(void *user_data, const char *buff, size_t len) {
 
   arg->idx--;
   lua_pushlstring(L, buff, len);
+  arg->eob = buff + len;
   return WS_OK;
 }
 
@@ -78,6 +80,7 @@ static int on_control_payload(void *user_data, const char *buff, size_t len) {
 
   arg->idx--;
   lua_pushlstring(L, buff, len);
+  arg->eob = buff + len;
   return WS_OK;
 }
 
@@ -115,6 +118,7 @@ static int ws_websocket_decode(lua_State *L) {
   ws_parser_init(&parser);
   arg.L = L;
   arg.idx = -1;
+  arg.eob = input;
 
   lua_newtable(L);
   ret = ws_parser_execute(&parser, &callbacks, &arg, (void *)input, sz);
@@ -132,8 +136,9 @@ static int ws_websocket_decode(lua_State *L) {
     lua_pushinteger(L, parser.bytes_remaining);
     lua_rawset(L, -3);
   }
+  lua_pushinteger(L, arg.eob - input + 1);
 
-  return 1;
+  return 2;
 }
 
 static size_t ws_calc_frame_size(ws_frame_type_t flags, size_t data_len) {
