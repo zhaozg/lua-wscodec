@@ -20,3 +20,11 @@ decoded = codec.decode(encoded)
 assert(type(decoded) == "table")
 assert(decoded.binary == data)
 decoded.binary = nil
+
+data = openssl.random(65536)
+encoded = codec.encode(data, "binary")
+
+local part = encoded:sub(1, 32768)
+decoded = codec.decode(part)
+assert(type(decoded) == "table")
+assert(decoded.remaining == #encoded - #part)

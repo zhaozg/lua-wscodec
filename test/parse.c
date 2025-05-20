@@ -29,8 +29,10 @@ on_data_payload(void* user_data, const char* buff, size_t len)
 }
 
 int
-on_data_end()
+on_data_end(void* user_data)
 {
+    (void)user_data;
+
     printf("data_end\n");
 
     return WS_OK;
@@ -61,16 +63,21 @@ on_control_payload(void* user_data, const char* buff, size_t len)
 }
 
 int
-on_control_end()
+on_control_end(void* user_data)
 {
+    (void)user_data;
+
     printf("control_end\n");
 
     return WS_OK;
 }
 
 int
-main()
+main(int argc, const char* argv[])
 {
+    (void)argc;
+    (void)argv;
+
     ws_parser_callbacks_t callbacks = {
         .on_data_begin      = on_data_begin,
         .on_data_payload    = on_data_payload,

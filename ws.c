@@ -81,28 +81,16 @@ static int on_control_payload(void *user_data, const char *buff, size_t len) {
   return WS_OK;
 }
 
-static int on_data_end(void *user_data) {
+static int on_end(void *user_data) {
   ws_arg *arg = user_data;
   lua_State *L = arg->L;
   if (arg->idx == -2) {
     lua_pushliteral(L, "");
     arg->idx--;
   }
-  assert(arg->idx == -3);
-  lua_rawset(L, arg->idx);
-  arg->idx = -1;
-  return WS_OK;
-}
-
-static int on_control_end(void *user_data) {
-  ws_arg *arg = user_data;
-  lua_State *L = arg->L;
-  if (arg->idx == -2) {
-    lua_pushliteral(L, "");
-    arg->idx--;
+  if (arg->idx == -3) {
+    lua_rawset(L, arg->idx);
   }
-  assert(arg->idx == -3);
-  lua_rawset(L, arg->idx);
   arg->idx = -1;
   return WS_OK;
 }
@@ -110,10 +98,10 @@ static int on_control_end(void *user_data) {
 static ws_parser_callbacks_t callbacks = {
     .on_data_begin = on_data_begin,
     .on_data_payload = on_data_payload,
-    .on_data_end = on_data_end,
+    .on_data_end = on_end,
     .on_control_begin = on_control_begin,
     .on_control_payload = on_control_payload,
-    .on_control_end = on_control_end,
+    .on_control_end = on_end,
 };
 
 static int ws_websocket_decode(lua_State *L) {
@@ -130,13 +118,21 @@ static int ws_websocket_decode(lua_State *L) {
 
   lua_newtable(L);
   ret = ws_parser_execute(&parser, &callbacks, &arg, (void *)input, sz);
-  if (ret != WS_OK) {
+  if (ret != WS_OK ) {
     lua_pushnil(L);
-    lua_insert(L, lua_gettop(L) - 1);
     lua_pushstring(L, ws_parser_error(ret));
+    lua_pushinteger(L, ret);
     return 3;
   }
+  on_end(&arg);
   assert(arg.idx == -1);
+
+  if (parser.bytes_remaining > 0) {
+    lua_pushliteral(L, "remaining");
+    lua_pushinteger(L, parser.bytes_remaining);
+    lua_rawset(L, -3);
+  }
+
   return 1;
 }
 
