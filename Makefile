@@ -26,5 +26,9 @@ clean:
 %.o: %.c ws_parser.h
 	$(CC) -o $@ $(CFLAGS) -c $<
 
+install: $(T).so
+	mkdir -p $(shell pkg-config luajit --variable=INSTALL_CMOD)/ws
+	install -m 755 $(T).so $(shell pkg-config luajit --variable=INSTALL_CMOD)/ws
+
 test/parse: test/parse.o ws_parser.o
 test/parse.o: CFLAGS+=-iquote .
