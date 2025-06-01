@@ -19,6 +19,10 @@ $(T).so: ws.c ws_parser.c
 
 test: test/parse
 	ruby test/driver.rb
+	luajit test/codec.lua
+
+doc:
+	ldoc -o manual -x html ws.c
 
 clean:
 	rm -rf *.o *.so ws test/parse test/parse.o

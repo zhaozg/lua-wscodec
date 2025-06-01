@@ -1,3 +1,4 @@
 /test/parse
 
 *.o
+**/*.so

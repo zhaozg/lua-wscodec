@@ -1,5 +1,3 @@
-#include <errno.h>
-#include <lua.h>
 #include <stdio.h>
 #include <stdlib.h>
 #ifndef WIN32
@@ -7,9 +5,11 @@
 #endif
 #include <assert.h>
 #include <string.h>
+#include <errno.h>
 
-#include <lauxlib.h>
+#include <lua.h>
 #include <lualib.h>
+#include <lauxlib.h>
 
 #include "ws_parser.h"
 
@@ -23,38 +23,18 @@ typedef struct {
   const char* eob;
 } ws_arg;
 
-static int on_data_begin(void *user_data, ws_frame_type_t frame_type) {
+static int on_begin(void *user_data, ws_frame_type_t frame_type) {
   ws_arg *arg = user_data;
   lua_State *L = arg->L;
 
   arg->idx--;
-  if (frame_type == WS_FRAME_TEXT)
-    lua_pushliteral(L, "text");
-  else if (frame_type == WS_FRAME_BINARY)
-    lua_pushliteral(L, "binary");
-  else
-    lua_pushinteger(L, frame_type);
-
-  return WS_OK;
-}
-
-static int on_data_payload(void *user_data, const char *buff, size_t len) {
-  ws_arg *arg = user_data;
-  lua_State *L = arg->L;
-
-  arg->idx--;
-  lua_pushlstring(L, buff, len);
-  arg->eob = buff + len;
-  return WS_OK;
-}
-
-static int on_control_begin(void *user_data, ws_frame_type_t frame_type) {
-  ws_arg *arg = user_data;
-  lua_State *L = arg->L;
-
-  arg->idx--;
-
   switch (frame_type) {
+  case WS_FRAME_TEXT:
+    lua_pushliteral(L, "text");
+    break;
+  case WS_FRAME_BINARY:
+    lua_pushliteral(L, "binary");
+    break;
   case WS_FRAME_PING:
     lua_pushliteral(L, "ping");
     break;
@@ -67,14 +47,14 @@ static int on_control_begin(void *user_data, ws_frame_type_t frame_type) {
   default:
     lua_pushinteger(L, frame_type);
   }
-  lua_pushliteral(L, "control");
+  lua_pushliteral(L, "frame");
   lua_pushvalue(L, -2);
   lua_rawset(L, -4);
 
   return WS_OK;
 }
 
-static int on_control_payload(void *user_data, const char *buff, size_t len) {
+static inline int on_payload(void *user_data, const char *buff, size_t len) {
   ws_arg *arg = user_data;
   lua_State *L = arg->L;
 
@@ -99,14 +79,44 @@ static int on_end(void *user_data) {
 }
 
 static ws_parser_callbacks_t callbacks = {
-    .on_data_begin = on_data_begin,
-    .on_data_payload = on_data_payload,
+    .on_data_begin = on_begin,
+    .on_data_payload = on_payload,
     .on_data_end = on_end,
-    .on_control_begin = on_control_begin,
-    .on_control_payload = on_control_payload,
+    .on_control_begin = on_begin,
+    .on_control_payload = on_payload,
     .on_control_end = on_end,
 };
 
+
+/**
+* WebSocket Codec Module
+* (LDoc)
+* Provides functionality for encoding and decoding WebSocket frames.
+* @module ws.codec
+*/
+
+/**
+* WebSocket parsed frame.
+* Defines the types of parsed WebSocket frames.
+*  @field text text frame data
+*  @field binary binary frame data
+*  @field frame frame type, may be "text", "binary", "ping", "pong", "close" or a number
+*  @field remaining number of bytes remaining in the input string after decoding
+*  @table paresd
+*/
+
+/**
+* Decode a WebSocket frame.
+* Parses a WebSocket frame into a Lua table.
+* @function decode
+* @tparam string input The WebSocket frame data to decode
+* @tparam[opt=1] number offset The offset in the input string to start decoding from (default is 1)
+* @treturn[1] parsed A Lua table containing the decoded frame data
+* @treturn[1] number The next frame offset in the input string
+* @treturn[2] nil decoding fails
+* @treturn[2] string decoding error message
+* @treturn[2] number error code
+*/
 static int ws_websocket_decode(lua_State *L) {
   int ret;
   ws_arg arg;
@@ -114,6 +124,10 @@ static int ws_websocket_decode(lua_State *L) {
 
   size_t sz;
   const char *input = luaL_checklstring(L, 1, &sz);
+  size_t off = luaL_optinteger(L, 2, 1);
+  off-=1; // Lua is 1-based, C is 0-based
+
+  luaL_argcheck(L, sz > off, 1, "input string is empty or too short");
 
   ws_parser_init(&parser);
   arg.L = L;
@@ -121,7 +135,7 @@ static int ws_websocket_decode(lua_State *L) {
   arg.eob = input;
 
   lua_newtable(L);
-  ret = ws_parser_execute(&parser, &callbacks, &arg, (void *)input, sz);
+  ret = ws_parser_execute(&parser, &callbacks, &arg, (void *)(input+off), sz - off);
   if (ret != WS_OK ) {
     lua_pushnil(L);
     lua_pushstring(L, ws_parser_error(ret));
@@ -214,6 +228,15 @@ static size_t websocket_build_frame(char *frame, ws_frame_type_t flags,
   return body_offset + data_len;
 }
 
+/**
+* Encode a WebSocket frame.
+* Generates a WebSocket frame based on the input data and frame type.
+* @function encode
+* @param input string The data to encode
+* @param frame_type string The frame type, can be "text", "binary", "close", "ping", or "pong"
+* @param[opt] mask string|number The mask, can be a 4-byte string or a number
+* @return string The encoded WebSocket frame
+*/
 static int ws_websocket_encode(lua_State *L) {
   size_t sz, len;
   char *frame;
@@ -258,6 +281,24 @@ static const luaL_Reg ws_funcs[] = {{"decode", ws_websocket_decode},
 
 #define WEBSOCKET_UUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 #define WEBSOCKET_VERSION 13
+
+/**
+* WebSocket UUID constant.
+* A fixed UUID used for WebSocket handshakes.
+* @field UUID string
+*
+* WebSocket protocol version.
+* The currently supported WebSocket protocol version.
+* @field VERSION number
+*
+* WebSocket frame type constants.
+* Defines the types of WebSocket frames.
+* @field text number Text frame type
+* @field binary number Binary frame type
+* @field close number Close frame type
+* @field ping number Ping frame type
+* @field pong number Pong frame type
+*/
 
 LUALIB_API int luaopen_ws_codec(lua_State *L) {
   luaL_newlib(L, ws_funcs);
